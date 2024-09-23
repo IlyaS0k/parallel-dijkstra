@@ -38,9 +38,9 @@ fun shortestPathParallel(start: Node) {
                             cur.distance
                         }
                         synchronized(e.to) {
-                                if (e.to.distance > curDist + e.weight) {
-                                    e.to.distance = curDist + e.weight
-                                    q.add(e.to)
+                            if (e.to.distance > curDist + e.weight) {
+                                e.to.distance = curDist + e.weight
+                                q.add(e.to)
                             }
                         }
                     }
@@ -77,33 +77,33 @@ class ConcurrentMultiPriorityQueue(queuesCount: Int) {
         val secondQueueLock = queuesLocks[secondIndex]
 
         var resultNode: Node? = null
-
+        var acquiredFirst = false
+        var acquiredSecond = false
         while (true) {
-            if (firstQueueLock.tryLock()) {
-                try {
-                    while (true) {
-                        try {
-                            if (secondQueueLock.tryLock()) {
-                                val firstQueueElement = firstQueue.peek()
-                                val secondQueueElement = secondQueue.peek()
-                                resultNode =
-                                    if (firstQueueElement == null && secondQueueElement == null)
-                                        null
-                                    else
-                                        if (NODE_DISTANCE_COMPARATOR.compare(firstQueueElement, secondQueueElement) > 0)
-                                            firstQueue.poll()
-                                        else
-                                            secondQueue.poll()
-                            }
-                        } finally {
-                            secondQueueLock.unlock()
-                            break
-                        }
-                    }
-                } finally {
-                    firstQueueLock.unlock()
-                    break
+            try {
+                acquiredFirst = firstQueueLock.tryLock()
+                acquiredSecond = secondQueueLock.tryLock()
+
+                if (acquiredFirst && acquiredSecond) {
+                    val firstQueueElement = firstQueue.peek()
+                    val secondQueueElement = secondQueue.peek()
+                    resultNode =
+                        if (firstQueueElement == null && secondQueueElement == null)
+                            null
+                        else
+                            if (NODE_DISTANCE_COMPARATOR.compare(firstQueueElement, secondQueueElement) > 0)
+                                firstQueue.poll()
+                            else
+                                secondQueue.poll()
                 }
+            } finally {
+                if (acquiredFirst) {
+                    firstQueueLock.unlock()
+                }
+                if (acquiredSecond) {
+                    secondQueueLock.unlock()
+                }
+                break
             }
         }
         if (resultNode != null) processedNodes.decrementAndGet()
